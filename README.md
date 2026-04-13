@@ -23,9 +23,11 @@ lmux/
 ├── config.yaml       ← auto-managed (do not edit)
 ├── registry.json     ← model metadata store
 ├── .env              ← HF token + settings
-├── models/           ← GGUF files land here
+├── .venv/            ← isolated Python environment (uv)
+├── models/           ← GGUF files (or custom path)
 ├── install.sh        ← Linux / macOS / WSL installer
-└── install.ps1       ← Windows installer
+├── install.ps1       ← Windows installer
+└── uninstall.sh      ← Clean removal script
 ```
 
 **Stack:**
@@ -42,7 +44,15 @@ lmux/
 curl -sSL https://raw.githubusercontent.com/rohan-aistudio/lmux/main/install.sh | sh
 ```
 
-**or clone and install:**
+The installer will:
+1. Install **uv** if not present (Python package manager)
+2. Clone lmux to `~/.lmux`
+3. Create an **isolated virtual environment** (python ≥3.12) — no system Python conflicts
+4. Install dependencies (`huggingface_hub`, `pyyaml`) inside the venv
+5. Detect GPU and install NVIDIA Container Toolkit if needed
+6. Start the Docker stack
+
+**or clone and install manually:**
 ```bash
 git clone https://github.com/rohan-aistudio/lmux.git ~/.lmux
 cd ~/.lmux && bash install.sh
@@ -55,11 +65,31 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 . $PROFILE
 ```
 
-**Manual:**
+---
+
+## Uninstall
+
+**Linux / macOS:**
 ```bash
-pip install huggingface_hub pyyaml
-python lmux.py init
+bash ~/.lmux/uninstall.sh
 ```
+
+**Remove everything including downloaded models:**
+```bash
+bash ~/.lmux/uninstall.sh --delete-models
+```
+
+**Skip confirmation:**
+```bash
+bash ~/.lmux/uninstall.sh --delete-models --yes
+```
+
+This removes:
+- Docker containers (`lmux-engine`, `lmux-ui`) and volumes
+- Python virtual environment (`.venv`)
+- Shell aliases from `.bashrc` / `.zshrc` / PowerShell profile
+- lmux installation directory (`~/.lmux`)
+- Downloaded models (only with `--delete-models`)
 
 ---
 
@@ -68,6 +98,7 @@ python lmux.py init
 | Command | What it does |
 |---|---|
 | `lmux init` | Detect GPU/OS, write compose, start stack, add alias |
+| `lmux init --models-path /mnt/d/models` | Store models on a different drive |
 | `lmux pull <url\|repo>` | Download GGUF from HuggingFace |
 | `lmux ls` | List models with VRAM estimates and live status |
 | `lmux info <name>` | Show metadata, VRAM headroom |
@@ -127,6 +158,20 @@ lmux stats
 # Live status with GPU VRAM bar
 lmux status
 ```
+
+### Custom Model Storage Path
+
+Store models on a different drive (useful for NVMe, external drives, NAS):
+
+```bash
+# During init — models go to /mnt/nvme/lmux-models
+lmux init --models-path /mnt/nvme/lmux-models
+
+# Subsequent pulls auto-download to the configured path
+lmux pull bartowski/Meta-Llama-3-8B-Instruct-GGUF --quant Q4_K_M
+```
+
+The path is persisted in `registry.json` and mounted as a Docker volume in `docker-compose.yml`.
 
 ---
 
@@ -206,7 +251,11 @@ loaded and trigger unloads directly from the Open WebUI interface.
 
 ---
 
-## Live Stats
+## Live Stats (CLI)
+
+> **Note:** Live stats (VRAM usage, tok/s, KV cache) are available via the **CLI only** (`lmux status` / `lmux stats`).  
+> Open WebUI shows the green connection indicator and model selector, but does not natively display token throughput or VRAM consumption.  
+> For a full in-browser stats dashboard, consider running llama.cpp's built-in svelte-webui alongside Open WebUI.
 
 `lmux status` shows a real-time GPU VRAM bar with usage percentage, free memory,  
 GPU utilization, and temperature:
@@ -228,8 +277,7 @@ GPU utilization, and temperature:
 
 ## Requirements
 
-- Python 3.10+
+- Python 3.10+ (installer uses uv to provision python ≥3.12 in an isolated venv)
 - Git
 - Docker Desktop (or Docker Engine + Compose plugin)
 - NVIDIA GPU with CUDA drivers (optional, recommended)
-- `pip install huggingface_hub pyyaml`

@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # ──────────────────────────────────────────────────────────────────────────────
 # lmux installer — cross-platform (Linux / macOS / Windows WSL)
-# Usage: curl -sSL https://raw.githubusercontent.com/your-user/lmux/main/install.sh | sh
+# Usage: curl -sSL https://raw.githubusercontent.com/rohan-aistudio/lmux/main/install.sh | sh
 #        or:  bash install.sh
 # ──────────────────────────────────────────────────────────────────────────────
 set -e
 
 LMUX_INSTALL_DIR="${LMUX_INSTALL_DIR:-$HOME/.lmux}"
 LMUX_REPO="${LMUX_REPO:-https://github.com/rohan-aistudio/lmux.git}"
+LMUX_VENV="$LMUX_INSTALL_DIR/.venv"
 
 echo ""
 echo "  ██╗     ███╗   ███╗██╗   ██╗██╗  ██╗"
@@ -44,28 +45,19 @@ if ! command -v git &>/dev/null; then
 fi
 echo "  ✓  Git: $(git --version | head -1)"
 
-# ── Check Python ─────────────────────────────────────────────────────────────
-PYTHON=""
-for cmd in python3 python; do
-  if command -v "$cmd" &>/dev/null; then
-    VER=$("$cmd" -c "import sys; print(sys.version_info >= (3,10))" 2>/dev/null || echo "False")
-    if [ "$VER" = "True" ]; then
-      PYTHON="$cmd"
-      break
-    fi
+# ── Check / Install uv ──────────────────────────────────────────────────────
+if ! command -v uv &>/dev/null; then
+  echo "  →  uv not found. Installing..."
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  # Source the env so uv is available in this session
+  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+  if ! command -v uv &>/dev/null; then
+    echo "  ✗  uv installation failed."
+    echo "     Install manually: https://docs.astral.sh/uv/getting-started/installation/"
+    exit 1
   fi
-done
-
-if [ -z "$PYTHON" ]; then
-  echo "  ✗  Python 3.10+ not found."
-  if [ "$OS" = "linux" ]; then
-    echo "     Run: sudo apt install python3 python3-pip"
-  elif [ "$OS" = "mac" ]; then
-    echo "     Run: brew install python"
-  fi
-  exit 1
 fi
-echo "  ✓  Python: $($PYTHON --version)"
+echo "  ✓  uv: $(uv --version)"
 
 # ── Check Docker ─────────────────────────────────────────────────────────────
 if ! command -v docker &>/dev/null; then
@@ -138,42 +130,58 @@ fi
 
 LMUX_PY="$LMUX_INSTALL_DIR/lmux.py"
 
-# ── Install Python dependencies ───────────────────────────────────────────────
+# ── Create isolated venv using uv ────────────────────────────────────────────
 echo ""
-echo "  → Installing Python dependencies..."
-$PYTHON -m pip install --quiet --upgrade huggingface_hub pyyaml
-echo "  ✓  huggingface_hub, pyyaml installed"
+echo "  → Creating isolated Python environment (python ≥3.12)..."
+if [ ! -d "$LMUX_VENV" ]; then
+  uv venv "$LMUX_VENV" --python ">=3.12"
+fi
+echo "  ✓  Virtual environment: $LMUX_VENV"
 
-# ── Set up shell alias ────────────────────────────────────────────────────────
+# Activate venv for this session
+LMUX_PYTHON="$LMUX_VENV/bin/python"
+
+# ── Install Python dependencies (isolated in venv) ───────────────────────────
+echo "  → Installing Python dependencies in venv..."
+uv pip install --python "$LMUX_PYTHON" huggingface_hub pyyaml
+echo "  ✓  huggingface_hub, pyyaml installed (isolated)"
+
+# ── Set up shell alias (points at venv python) ───────────────────────────────
 SHELL_NAME="$(basename "${SHELL:-bash}")"
-ALIAS_LINE="alias lmux='$PYTHON $LMUX_PY'"
+ALIAS_LINE="alias lmux='$LMUX_PYTHON $LMUX_PY'"
 
 if [ "$OS" = "linux" ] || [ "$OS" = "mac" ]; then
   if [ "$SHELL_NAME" = "zsh" ]; then
     PROFILE="$HOME/.zshrc"
   elif [ "$SHELL_NAME" = "fish" ]; then
     PROFILE="$HOME/.config/fish/config.fish"
-    ALIAS_LINE="alias lmux '$PYTHON $LMUX_PY'"
+    ALIAS_LINE="alias lmux '$LMUX_PYTHON $LMUX_PY'"
   else
     PROFILE="$HOME/.bashrc"
   fi
 
+  # Remove old alias if present (in case python path changed)
   if grep -q "alias lmux=" "$PROFILE" 2>/dev/null; then
-    echo "  ✓  lmux alias already in $PROFILE"
-  else
-    echo "" >> "$PROFILE"
-    echo "# lmux — Language Model Multiplexer" >> "$PROFILE"
-    echo "$ALIAS_LINE" >> "$PROFILE"
-    echo "  ✓  Alias added to $PROFILE"
-    echo "  →  Run: source $PROFILE  (or open a new terminal)"
+    # Update existing alias
+    if [ "$OS" = "mac" ]; then
+      sed -i '' "/alias lmux=/d" "$PROFILE"
+    else
+      sed -i "/alias lmux=/d" "$PROFILE"
+    fi
   fi
+
+  echo "" >> "$PROFILE"
+  echo "# lmux — Language Model Multiplexer" >> "$PROFILE"
+  echo "$ALIAS_LINE" >> "$PROFILE"
+  echo "  ✓  Alias added to $PROFILE"
+  echo "  →  Run: source $PROFILE  (or open a new terminal)"
 fi
 
 # ── Windows PowerShell alias (WSL passthrough) ────────────────────────────────
 if [ "$OS" = "windows" ]; then
   PS_PROFILE=$(powershell.exe -Command 'echo $PROFILE' 2>/dev/null | tr -d '\r' || echo "")
   if [ -n "$PS_PROFILE" ]; then
-    PS_FUNC="function lmux { python '$LMUX_PY' \$args }"
+    PS_FUNC="function lmux { & '$LMUX_PYTHON' '$LMUX_PY' \$args }"
     if ! grep -q "function lmux" "$PS_PROFILE" 2>/dev/null; then
       echo "$PS_FUNC" >> "$PS_PROFILE"
       echo "  ✓  PowerShell alias added"
@@ -188,7 +196,7 @@ echo "  ✓  models/ directory ready"
 # ── Run lmux init (GPU detection + compose generation + docker up) ─────────────
 echo ""
 echo "  → Initializing lmux stack..."
-$PYTHON "$LMUX_PY" init
+"$LMUX_PYTHON" "$LMUX_PY" init
 
 echo ""
 echo "  ┌─────────────────────────────────────────────────────┐"
@@ -198,5 +206,7 @@ echo "  │  Start pulling models:                               │"
 echo "  │  lmux pull bartowski/Meta-Llama-3-8B-Instruct-GGUF  │"
 echo "  │         --quant Q4_K_M                               │"
 echo "  │                                                      │"
+echo "  │  Uninstall:                                          │"
+echo "  │  bash ~/.lmux/uninstall.sh                           │"
 echo "  └─────────────────────────────────────────────────────┘"
 echo ""

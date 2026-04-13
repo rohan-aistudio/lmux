@@ -4,6 +4,7 @@
 $ErrorActionPreference = "Stop"
 $LMUX_INSTALL_DIR = if ($env:LMUX_INSTALL_DIR) { $env:LMUX_INSTALL_DIR } else { "$env:USERPROFILE\.lmux" }
 $LMUX_REPO = if ($env:LMUX_REPO) { $env:LMUX_REPO } else { "https://github.com/rohan-aistudio/lmux.git" }
+$LMUX_VENV = "$LMUX_INSTALL_DIR\.venv"
 
 Write-Host ""
 Write-Host "  ██╗     ███╗   ███╗██╗   ██╗██╗  ██╗" -ForegroundColor Cyan
@@ -24,20 +25,22 @@ try {
     exit 1
 }
 
-# ── Check Python ──────────────────────────────────────────────────────────────
-$PYTHON = $null
-foreach ($cmd in @("python", "python3")) {
+# ── Check / Install uv ───────────────────────────────────────────────────────
+try {
+    $uvVer = uv --version 2>$null
+    Write-Host "  ✓  uv: $uvVer" -ForegroundColor Green
+} catch {
+    Write-Host "  →  uv not found. Installing..." -ForegroundColor Cyan
+    irm https://astral.sh/uv/install.ps1 | iex
+    $env:PATH = "$env:USERPROFILE\.local\bin;$env:PATH"
     try {
-        $ver = & $cmd -c "import sys; print(sys.version_info >= (3,10))" 2>$null
-        if ($ver -eq "True") { $PYTHON = $cmd; break }
-    } catch {}
+        $uvVer = uv --version
+        Write-Host "  ✓  uv: $uvVer" -ForegroundColor Green
+    } catch {
+        Write-Host "  ✗  uv installation failed. Install manually: https://docs.astral.sh/uv/" -ForegroundColor Red
+        exit 1
+    }
 }
-if (-not $PYTHON) {
-    Write-Host "  ✗  Python 3.10+ not found." -ForegroundColor Red
-    Write-Host "     Download from: https://python.org/downloads/"
-    exit 1
-}
-Write-Host "  ✓  Python: $(& $PYTHON --version)" -ForegroundColor Green
 
 # ── Check Docker ──────────────────────────────────────────────────────────────
 try {
@@ -53,8 +56,6 @@ try {
     $gpuInfo = nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>$null
     if ($gpuInfo) {
         Write-Host "  ✓  GPU: $($gpuInfo.Trim())" -ForegroundColor Green
-
-        # Check for NVIDIA Container Toolkit (Docker GPU support)
         try {
             $nctk = docker info 2>$null | Select-String "nvidia"
             if (-not $nctk) {
@@ -80,26 +81,37 @@ if (Test-Path "$LMUX_INSTALL_DIR\.git") {
 
 $LMUX_PY = Join-Path $LMUX_INSTALL_DIR "lmux.py"
 
-# ── Install Python dependencies ───────────────────────────────────────────────
+# ── Create isolated venv using uv ────────────────────────────────────────────
 Write-Host ""
-Write-Host "  → Installing Python dependencies..."
-& $PYTHON -m pip install --quiet --upgrade huggingface_hub pyyaml
-Write-Host "  ✓  huggingface_hub, pyyaml installed" -ForegroundColor Green
+Write-Host "  → Creating isolated Python environment (python ≥3.12)..."
+if (-not (Test-Path $LMUX_VENV)) {
+    uv venv $LMUX_VENV --python ">=3.12"
+}
+Write-Host "  ✓  Virtual environment: $LMUX_VENV" -ForegroundColor Green
+
+$LMUX_PYTHON = Join-Path $LMUX_VENV "Scripts\python.exe"
+
+# ── Install Python dependencies (isolated in venv) ───────────────────────────
+Write-Host "  → Installing Python dependencies in venv..."
+uv pip install --python $LMUX_PYTHON huggingface_hub pyyaml
+Write-Host "  ✓  huggingface_hub, pyyaml installed (isolated)" -ForegroundColor Green
 
 # ── Add PowerShell function ───────────────────────────────────────────────────
 $profileDir = Split-Path -Parent $PROFILE
 if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Path $profileDir | Out-Null }
 if (-not (Test-Path $PROFILE))    { New-Item -ItemType File      -Path $PROFILE    | Out-Null }
 
+# Remove old alias if present
 $existingProfile = Get-Content $PROFILE -Raw -ErrorAction SilentlyContinue
-if ($existingProfile -notmatch "function lmux") {
-    Add-Content $PROFILE "`n# lmux — Language Model Multiplexer"
-    Add-Content $PROFILE "function lmux { python `"$LMUX_PY`" @args }"
-    Write-Host "  ✓  PowerShell alias added to $PROFILE" -ForegroundColor Green
-    Write-Host "  →  Run: . `$PROFILE  (to activate in current session)" -ForegroundColor Cyan
-} else {
-    Write-Host "  ✓  Alias already in $PROFILE" -ForegroundColor Green
+if ($existingProfile -match "function lmux") {
+    $lines = Get-Content $PROFILE | Where-Object { $_ -notmatch "function lmux" -and $_ -notmatch "# lmux —" }
+    $lines | Set-Content $PROFILE
 }
+
+Add-Content $PROFILE "`n# lmux — Language Model Multiplexer"
+Add-Content $PROFILE "function lmux { & `"$LMUX_PYTHON`" `"$LMUX_PY`" @args }"
+Write-Host "  ✓  PowerShell alias added to $PROFILE" -ForegroundColor Green
+Write-Host "  →  Run: . `$PROFILE  (to activate in current session)" -ForegroundColor Cyan
 
 # ── Create models directory ───────────────────────────────────────────────────
 New-Item -ItemType Directory -Force -Path (Join-Path $LMUX_INSTALL_DIR "models") | Out-Null
@@ -108,9 +120,11 @@ Write-Host "  ✓  models\ directory ready" -ForegroundColor Green
 # ── Run lmux init ─────────────────────────────────────────────────────────────
 Write-Host ""
 Write-Host "  → Initializing lmux stack..."
-& $PYTHON $LMUX_PY init
+& $LMUX_PYTHON $LMUX_PY init
 
 Write-Host ""
 Write-Host "  lmux installed. Pull your first model:" -ForegroundColor Green
 Write-Host "  lmux pull bartowski/Meta-Llama-3-8B-Instruct-GGUF --quant Q4_K_M" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  Uninstall: powershell -File $LMUX_INSTALL_DIR\uninstall.ps1" -ForegroundColor DarkGray
 Write-Host ""
