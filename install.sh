@@ -143,7 +143,7 @@ LMUX_PYTHON="$LMUX_VENV/bin/python"
 
 # ── Install Python dependencies (isolated in venv) ───────────────────────────
 echo "  → Installing Python dependencies in venv..."
-uv pip install --python "$LMUX_PYTHON" huggingface_hub pyyaml
+uv pip install --python "$LMUX_PYTHON" huggingface_hub hf-transfer pyyaml
 echo "  ✓  huggingface_hub, pyyaml installed (isolated)"
 
 # ── Set up shell alias (points at venv python) ───────────────────────────────

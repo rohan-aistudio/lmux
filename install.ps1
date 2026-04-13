@@ -93,7 +93,7 @@ $LMUX_PYTHON = Join-Path $LMUX_VENV "Scripts\python.exe"
 
 # ── Install Python dependencies (isolated in venv) ───────────────────────────
 Write-Host "  → Installing Python dependencies in venv..."
-uv pip install --python $LMUX_PYTHON huggingface_hub pyyaml
+uv pip install --python $LMUX_PYTHON huggingface_hub hf-transfer pyyaml
 Write-Host "  ✓  huggingface_hub, pyyaml installed (isolated)" -ForegroundColor Green
 
 # ── Add PowerShell function ───────────────────────────────────────────────────

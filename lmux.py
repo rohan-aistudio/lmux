@@ -412,6 +412,9 @@ def download_gguf(repo_id: str, filename: str, token: str, models_dir: Path | No
     if token:
         login(token=token, add_to_git_credential=False)
 
+    # Enable Rust-based parallel downloader for max speed
+    os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+
     dest = models_dir or MODELS_DIR
     dest.mkdir(parents=True, exist_ok=True)
     info(f"Downloading {filename}")
