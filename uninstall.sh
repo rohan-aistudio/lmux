@@ -56,7 +56,7 @@ echo ""
 
 # ── Stop and remove Docker containers ────────────────────────────────────────
 echo "  → Stopping Docker containers..."
-if command -v docker &>/dev/null; then
+if command -v docker > /dev/null 2>&1; then
   docker compose -f "$LMUX_INSTALL_DIR/docker-compose.yml" down 2>/dev/null || true
   docker rm -f lmux-engine lmux-ui 2>/dev/null || true
   echo "  ✓  Containers removed"

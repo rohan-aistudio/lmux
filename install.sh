@@ -34,7 +34,7 @@ esac
 echo "  → Detected OS: $OS ($ARCH)"
 
 # ── Check Git ────────────────────────────────────────────────────────────────
-if ! command -v git &>/dev/null; then
+if ! command -v git > /dev/null 2>&1; then
   echo "  ✗  git not found."
   if [ "$OS" = "linux" ]; then
     echo "     Run: sudo apt install git"
@@ -46,12 +46,12 @@ fi
 echo "  ✓  Git: $(git --version | head -1)"
 
 # ── Check / Install uv ──────────────────────────────────────────────────────
-if ! command -v uv &>/dev/null; then
+if ! command -v uv > /dev/null 2>&1; then
   echo "  →  uv not found. Installing..."
   curl -LsSf https://astral.sh/uv/install.sh | sh
   # Source the env so uv is available in this session
   export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
-  if ! command -v uv &>/dev/null; then
+  if ! command -v uv > /dev/null 2>&1; then
     echo "  ✗  uv installation failed."
     echo "     Install manually: https://docs.astral.sh/uv/getting-started/installation/"
     exit 1
@@ -60,7 +60,7 @@ fi
 echo "  ✓  uv: $(uv --version)"
 
 # ── Check Docker ─────────────────────────────────────────────────────────────
-if ! command -v docker &>/dev/null; then
+if ! command -v docker > /dev/null 2>&1; then
   echo "  ✗  Docker not found."
   echo "     Install from: https://docs.docker.com/get-docker/"
   exit 1
@@ -69,19 +69,19 @@ echo "  ✓  Docker: $(docker --version | head -1)"
 
 # ── Check NVIDIA GPU ─────────────────────────────────────────────────────────
 GPU_AVAILABLE=false
-if command -v nvidia-smi &>/dev/null; then
+if command -v nvidia-smi > /dev/null 2>&1; then
   GPU_INFO=$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null | head -1 || echo "")
   if [ -n "$GPU_INFO" ]; then
     GPU_AVAILABLE=true
     echo "  ✓  GPU: $GPU_INFO"
 
     # ── Install NVIDIA Container Toolkit if missing ────────────────────────
-    if ! command -v nvidia-container-toolkit &>/dev/null && ! dpkg -l nvidia-container-toolkit &>/dev/null 2>&1; then
+    if ! command -v nvidia-container-toolkit > /dev/null 2>&1 && ! dpkg -l nvidia-container-toolkit > /dev/null 2>&1; then
       echo ""
       echo "  → NVIDIA GPU detected but nvidia-container-toolkit not found."
       echo "  → Attempting to install NVIDIA Container Toolkit..."
       if [ "$OS" = "linux" ]; then
-        if command -v apt-get &>/dev/null; then
+        if command -v apt-get > /dev/null 2>&1; then
           distribution=$(. /etc/os-release; echo $ID$VERSION_ID)
           curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg 2>/dev/null || true
           curl -s -L "https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list" | \
@@ -109,7 +109,7 @@ if [ "$OS" = "mac" ] && [ "$ARCH" = "arm64" ]; then
 fi
 
 # ── AMD ROCm check ───────────────────────────────────────────────────────────
-if command -v rocminfo &>/dev/null; then
+if command -v rocminfo > /dev/null 2>&1; then
   echo "  ✓  AMD ROCm detected"
 fi
 
