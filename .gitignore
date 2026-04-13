@@ -1,0 +1,20 @@
+# Model files
+*.gguf
+models/
+
+# Environment
+.env
+
+# Generated configs
+docker-compose.yml
+config.yaml
+registry.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# OS files
+.DS_Store
+Thumbs.db
