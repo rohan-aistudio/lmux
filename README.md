@@ -39,12 +39,12 @@ lmux/
 
 **One-liner (Linux / macOS / WSL):**
 ```bash
-curl -sSL https://raw.githubusercontent.com/your-user/lmux/main/install.sh | sh
+curl -sSL https://raw.githubusercontent.com/rohan-aistudio/lmux/main/install.sh | sh
 ```
 
 **or clone and install:**
 ```bash
-git clone https://github.com/your-user/lmux.git ~/.lmux
+git clone https://github.com/rohan-aistudio/lmux.git ~/.lmux
 cd ~/.lmux && bash install.sh
 source ~/.bashrc   # or ~/.zshrc
 ```

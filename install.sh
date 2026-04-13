@@ -7,7 +7,7 @@
 set -e
 
 LMUX_INSTALL_DIR="${LMUX_INSTALL_DIR:-$HOME/.lmux}"
-LMUX_REPO="${LMUX_REPO:-https://github.com/your-user/lmux.git}"
+LMUX_REPO="${LMUX_REPO:-https://github.com/rohan-aistudio/lmux.git}"
 
 echo ""
 echo "  ██╗     ███╗   ███╗██╗   ██╗██╗  ██╗"

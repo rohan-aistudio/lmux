@@ -3,7 +3,7 @@
 
 $ErrorActionPreference = "Stop"
 $LMUX_INSTALL_DIR = if ($env:LMUX_INSTALL_DIR) { $env:LMUX_INSTALL_DIR } else { "$env:USERPROFILE\.lmux" }
-$LMUX_REPO = if ($env:LMUX_REPO) { $env:LMUX_REPO } else { "https://github.com/your-user/lmux.git" }
+$LMUX_REPO = if ($env:LMUX_REPO) { $env:LMUX_REPO } else { "https://github.com/rohan-aistudio/lmux.git" }
 
 Write-Host ""
 Write-Host "  ██╗     ███╗   ███╗██╗   ██╗██╗  ██╗" -ForegroundColor Cyan
